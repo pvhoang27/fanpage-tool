@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Rep comment</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<header class="topbar"></header>
+
+<main class="wrap">
+  <div id="permWarn" class="permwarn" hidden></div>
+
+  <div class="grid-3">
+
+    <!-- ============ BÀI VIẾT ============ -->
+    <section class="card">
+      <div class="card-head">
+        <h2 class="card-title">📰 Bài viết</h2>
+        <span class="card-sub" id="postCount"></span>
+      </div>
+      <div id="posts" class="list short"><div class="empty"><span class="big-emoji">⏳</span>Đang tải bài viết…</div></div>
+    </section>
+
+    <!-- ============ COMMENT ============ -->
+    <section class="card">
+      <div class="list-head">
+        <p class="summary" id="summary">👈 Chọn một bài viết để xem comment</p>
+      </div>
+      <div class="list-head">
+        <div class="seg" id="filterSeg">
+          <button data-v="unreplied" class="on">Chưa trả lời</button>
+          <button data-v="all">Tất cả</button>
+        </div>
+        <input type="search" class="search" id="search" placeholder="Tìm tên / nội dung…" />
+        <button class="btn sm" id="btnAll">Chọn hết</button>
+        <button class="btn sm ghost" id="btnNone">Bỏ chọn</button>
+        <button class="btn sm ghost" id="btnReload" title="Tải lại">↻</button>
+      </div>
+      <div id="list" class="list"><div class="empty"><span class="big-emoji">💬</span>Comment của bài viết sẽ hiện ở đây.</div></div>
+    </section>
+
+    <!-- ============ TRẢ LỜI ============ -->
+    <aside class="card sticky composer-col">
+      <div class="card-head">
+        <h2 class="card-title">↩️ Trả lời</h2>
+      </div>
+
+      <div class="composer">
+        <div class="tpl-row">
+          <select id="tplSelect"><option value="">📋 Chọn câu mẫu…</option></select>
+          <button class="btn sm" id="btnSaveTpl" title="Lưu câu trả lời công khai thành câu mẫu">💾 Lưu</button>
+          <button class="btn sm ghost danger" id="btnDelTpl" title="Xoá câu mẫu đang chọn">🗑</button>
+        </div>
+
+        <div class="opt-box">
+          <label class="chk"><input type="checkbox" id="publicReply" checked /> <b>Trả lời công khai</b> dưới comment</label>
+          <textarea id="message" rows="3" placeholder="Dạ {{first_name}} kiểm tra tin nhắn giúp em với ạ, em nhắn cho mình rồi đó ạ!"></textarea>
+        </div>
+
+        <div class="opt-box">
+          <label class="chk"><input type="checkbox" id="sendPrivate" /> <b>Nhắn tin riêng</b> cho người comment</label>
+          <textarea id="privateMessage" rows="3" placeholder="Để trống thì dùng chung nội dung trả lời công khai." hidden></textarea>
+          <p class="tip" id="privateTip" hidden>Mỗi comment chỉ nhắn riêng được 1 lần, trong vòng 7 ngày kể từ lúc họ comment.</p>
+        </div>
+
+        <div class="vars">
+          Chèn:
+          <button class="var-btn" data-var="{{first_name}}">Tên gọi</button>
+          <button class="var-btn" data-var="{{name}}">Họ tên đầy đủ</button>
+        </div>
+
+        <div class="send-dock">
+          <button id="btnSend" class="btn primary big" disabled>Trả lời <span id="sendCount">0</span> comment</button>
+        </div>
+
+        <div class="progress-wrap">
+          <div class="bar" id="bar" hidden><div></div></div>
+          <p class="progress" id="stats"></p>
+          <div class="log" id="log"></div>
+        </div>
+      </div>
+
+      <details class="settings">
+        <summary>⚙ Cài đặt gửi</summary>
+        <div class="settings-body">
+          <div class="setting">
+            <span class="slabel">Nghỉ giữa mỗi comment</span>
+            <div class="setting-row">
+              <input type="number" id="delaySec" value="1.5" min="0" step="0.1" /> <span class="tip">giây</span>
+            </div>
+          </div>
+          <label class="chk"><input type="checkbox" id="skipReplied" checked /> Không trả lời lại comment đã từng trả lời</label>
+          <div class="setting-row"><button class="btn sm" id="btnResetLog">Xoá lịch sử đã trả lời</button></div>
+        </div>
+      </details>
+    </aside>
+  </div>
+</main>
+
+<script src="common.js"></script>
+<script src="comments.js"></script>
+</body>
+</html>

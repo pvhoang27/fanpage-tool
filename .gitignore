@@ -1,0 +1,22 @@
+# Thư viện cài bằng npm
+node_modules/
+
+# Bí mật: App Secret, token Page
+.env
+.env.*
+!.env.example
+
+# Dữ liệu chạy thật: token các Page, tên khách, lịch sử nhắn, đơn hàng, nhãn
+# (tool tự tạo lại thư mục này khi chạy)
+data/
+
+# Cài đặt Claude Code trên máy này
+.claude/
+
+# File rác của hệ điều hành / editor / log
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.log
+npm-debug.log*

@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Kết nối Facebook</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<header class="topbar"></header>
+
+<main class="wrap narrow">
+
+  <!-- ============ TRẠNG THÁI ============ -->
+  <section class="card">
+    <div class="card-head">
+      <h2 class="card-title">🔌 Trạng thái kết nối</h2>
+    </div>
+    <div class="card-pad" style="display:flex;flex-direction:column;gap:14px">
+      <div class="status-grid" id="stats">
+        <div class="stat"><div class="k">Page</div><div class="v">…</div></div>
+        <div class="stat"><div class="k">Token</div><div class="v">…</div></div>
+        <div class="stat"><div class="k">Quyền đọc dữ liệu đến</div><div class="v">…</div></div>
+        <div class="stat"><div class="k">Quyền</div><div class="v">…</div></div>
+      </div>
+      <p class="note" id="verdict">Đang kiểm tra…</p>
+
+      <div class="actions">
+        <a class="cta" href="/auth/login">🔑 Kết nối lại / gia hạn</a>
+        <a class="cta light" href="/auth/login?choose=1">＋ Thêm Page</a>
+      </div>
+
+      <details>
+        <summary class="tip" style="cursor:pointer">Xem chi tiết các quyền</summary>
+        <div class="perm-list" id="scopes"></div>
+      </details>
+    </div>
+  </section>
+
+  <!-- ============ CÁC PAGE ============ -->
+  <section class="card">
+    <div class="card-head">
+      <h2 class="card-title">📄 Các Page đã kết nối</h2>
+      <span class="card-sub">Bấm “Dùng Page này” để chuyển, không cần đăng nhập lại</span>
+    </div>
+    <div id="pageList"><div class="empty">Đang tải…</div></div>
+    <div class="card-pad" style="border-top:1px solid var(--line-soft)">
+      <p class="tip">Thiếu Page? Bấm <a href="/auth/login?choose=1">＋ Thêm Page</a>, đăng nhập Facebook và <b>tick tất cả Page</b> muốn dùng ở bước Facebook hỏi chọn Page.</p>
+    </div>
+  </section>
+
+  <!-- ============ HƯỚNG DẪN ============ -->
+  <section class="card">
+    <div class="card-head">
+      <h2 class="card-title">💡 Khi nào cần bấm “Kết nối lại”?</h2>
+    </div>
+    <div class="card-pad">
+      <ul class="steps">
+        <li>Thanh trên cùng báo <b>“Chưa kết nối”</b> (màu đỏ).</li>
+        <li>Gần tới ngày ở ô <b>“Quyền đọc dữ liệu đến”</b> — Facebook bắt xác nhận lại khoảng 90 ngày một lần.</li>
+        <li>Bạn vừa đổi mật khẩu Facebook, hoặc bị gỡ quyền quản trị Page.</li>
+      </ul>
+      <p class="tip">Bấm nút → đăng nhập Facebook → <b>tick đủ mọi quyền và chọn đúng Page</b> → xong. Tool tự lưu token mới.</p>
+    </div>
+
+    <details class="settings">
+      <summary>🛠 Bấm “Kết nối lại” mà Facebook báo lỗi?</summary>
+      <div class="settings-body">
+        <p class="tip">Nếu Facebook báo <i>“URL bị chặn”</i> hoặc nhắc tới <i>redirect URI</i>, vào trang quản lý app trên developers.facebook.com:</p>
+        <ol class="steps">
+          <li><b>App settings → Basic</b> → ô <b>App domains</b> thêm <code>localhost</code> → Save.</li>
+          <li><b>Facebook Login → Settings</b> → ô <b>Valid OAuth Redirect URIs</b> thêm
+            <code id="redirectUri">http://localhost:3000/auth/callback</code> → Save.</li>
+        </ol>
+      </div>
+    </details>
+
+    <details class="settings">
+      <summary>✍️ Cách thủ công: dán token</summary>
+      <div class="settings-body">
+        <ol class="steps">
+          <li>Mở <a href="https://developers.facebook.com/tools/explorer/" target="_blank" rel="noopener">Graph API Explorer</a>, góc phải chọn đúng app của bạn.</li>
+          <li>Bấm <b>Permissions</b> và tick:
+            <div class="perm-list">
+              <code>pages_show_list</code> <code>pages_messaging</code> <code>pages_read_engagement</code>
+              <code>pages_read_user_content</code> <code>pages_manage_engagement</code> <code>pages_manage_metadata</code>
+            </div>
+          </li>
+          <li>Bấm <b>Generate Access Token</b> → đăng nhập → chọn Page → Done. Copy token, dán vào đây:</li>
+        </ol>
+        <textarea id="token" rows="3" placeholder="Dán token vào đây (dán cả URL có access_token=... cũng được)"></textarea>
+        <button class="btn primary" id="btnExchange">Đổi thành token vĩnh viễn &amp; lưu</button>
+        <div id="result"></div>
+      </div>
+    </details>
+  </section>
+</main>
+
+<script src="common.js"></script>
+<script>
+renderTopbar('setup');
+
+const fmtDate = (ts) => new Date(ts * 1000).toLocaleDateString('vi-VN');
+
+function stat(k, v, cls = '') {
+  return `<div class="stat"><div class="k">${k}</div><div class="v ${cls}">${v}</div></div>`;
+}
+
+async function loadInfo() {
+  try {
+    const r = await fetch('/api/token-info');
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error);
+
+    const missing = j.missingForComments || [];
+    const daysLeft = j.dataAccessExpiresAt ? Math.round((j.dataAccessExpiresAt * 1000 - Date.now()) / 86400000) : null;
+    const soon = daysLeft != null && daysLeft < 14;
+
+    $('stats').innerHTML =
+      stat('Page', esc(j.pageName || j.pageId || '—')) +
+      stat('Token', j.valid === false ? 'Hỏng' : j.expiresAt === 0 ? 'Vĩnh viễn' : fmtDate(j.expiresAt),
+        j.valid === false ? 'bad' : 'good') +
+      stat('Quyền đọc dữ liệu đến', j.dataAccessExpiresAt ? `${fmtDate(j.dataAccessExpiresAt)}<br><small>(còn ${daysLeft} ngày)</small>` : '—',
+        soon ? 'bad' : '') +
+      stat('Quyền', missing.length ? `Thiếu ${missing.length}` : `Đủ (${j.scopes.length})`, missing.length ? 'bad' : 'good');
+
+    $('scopes').innerHTML =
+      j.scopes.map((s) => `<code class="good">${esc(s)}</code>`).join(' ') +
+      missing.map((s) => `<code class="bad">thiếu: ${esc(s)}</code>`).join(' ');
+
+    const v = $('verdict');
+    if (j.valid === false) {
+      v.className = 'note err';
+      v.textContent = '❌ Token đã hỏng. Bấm “Kết nối lại” bên dưới.';
+    } else if (missing.length) {
+      v.className = 'note warn';
+      v.textContent = `⚠️ Nhắn tin dùng được, nhưng tool comment còn thiếu quyền: ${missing.join(', ')}. Bấm “Kết nối lại” và tick đủ quyền.`;
+    } else if (soon) {
+      v.className = 'note warn';
+      v.textContent = `⏰ Còn ${daysLeft} ngày nữa Facebook sẽ bắt xác nhận lại. Bấm “Kết nối lại” để gia hạn.`;
+    } else {
+      v.className = 'note ok';
+      v.textContent = '✅ Mọi thứ đều ổn — dùng được cả tool tin nhắn và tool comment.';
+    }
+  } catch (e) {
+    $('stats').innerHTML = stat('Trạng thái', 'Chưa kết nối', 'bad');
+    $('verdict').className = 'note err';
+    $('verdict').textContent = '❌ Chưa kết nối được Facebook: ' + e.message;
+  }
+}
+
+$('btnExchange').onclick = async () => {
+  const token = $('token').value.trim();
+  if (!token) return toast('Bạn chưa dán token.', 'err');
+  $('btnExchange').disabled = true;
+  $('result').innerHTML = '<p class="tip">Đang xử lý…</p>';
+  try {
+    const j = await postJson('/api/exchange-token', { token });
+    $('result').innerHTML =
+      `<div class="okbox"><b>Xong!</b> Đã lưu token vĩnh viễn của Page <b>${esc(j.pageName)}</b>.
+       ${j.missingForComments.length ? `<br>Vẫn thiếu: ${esc(j.missingForComments.join(', '))} — tick thêm quyền rồi làm lại.` : ''}</div>`;
+    $('token').value = '';
+    loadInfo();
+    loadPageChip();
+    loadPageList();
+  } catch (e) {
+    $('result').innerHTML = `<div class="errbox"><b>Lỗi:</b> ${esc(e.message)}</div>`;
+  } finally {
+    $('btnExchange').disabled = false;
+  }
+};
+
+async function loadPageList() {
+  const box = $('pageList');
+  try {
+    const pages = await (await fetch('/api/pages')).json();
+    if (!pages.length) { box.innerHTML = '<div class="empty">Chưa có Page nào.</div>'; return; }
+    box.innerHTML = '';
+    pages.forEach((p) => {
+      const el = document.createElement('div');
+      el.className = 'item' + (p.active ? ' checked' : '');
+      el.style.cursor = 'default';
+      el.innerHTML = `${avatar(p.name)}
+        <div class="item-body"><div class="item-top"><span class="name">${esc(p.name)}</span></div>
+          <div class="msg">ID ${esc(p.id)}</div></div>
+        ${p.active
+          ? '<span class="badge ok">✓ Đang dùng</span>'
+          : `<button class="btn sm primary" data-act="use">Dùng Page này</button>
+             <button class="btn sm ghost danger" data-act="rm" title="Bỏ khỏi danh sách">✕</button>`}`;
+      el.querySelector('[data-act=use]')?.addEventListener('click', async () => {
+        try {
+          await postJson('/api/pages/switch', { id: p.id });
+          toast(`Đã chuyển sang ${p.name}`, 'ok');
+          loadInfo(); loadPageList(); loadPageChip();
+        } catch (e) { toast(e.message, 'err'); }
+      });
+      el.querySelector('[data-act=rm]')?.addEventListener('click', async () => {
+        if (!confirm(`Bỏ "${p.name}" khỏi danh sách? (Muốn dùng lại thì bấm ＋ Thêm Page.)`)) return;
+        try { await postJson('/api/pages/remove', { id: p.id }); loadPageList(); loadPageChip(); }
+        catch (e) { toast(e.message, 'err'); }
+      });
+      box.appendChild(el);
+    });
+  } catch (e) {
+    box.innerHTML = `<div class="empty">Không tải được: ${esc(e.message)}</div>`;
+  }
+}
+
+$('redirectUri').textContent = location.origin + '/auth/callback';
+loadInfo();
+loadPageList();
+</script>
+</body>
+</html>
