@@ -29,6 +29,14 @@ document.querySelectorAll('#rangeChips .chip').forEach((chip) => {
 });
 
 $('btnReload').onclick = () => loadConversations();
+
+// Bat/tat "Bo qua nguoi da nhan": bo tick / tick lai nhung nguoi da nhan
+$('skipSent').onchange = () => {
+  items.filter((it) => it.alreadySent && canSend(it)).forEach((it) => {
+    $('skipSent').checked ? selected.delete(it.psid) : selected.add(it.psid);
+  });
+  renderList();
+};
 $('search').oninput = () => { query = $('search').value.trim().toLowerCase(); renderList(); };
 
 /* ======================= tai danh sach ======================= */
@@ -59,7 +67,8 @@ async function loadConversations() {
     // Ai moi nhan gan nhat len dau
     items = j.items.sort((a, b) => a.hoursSinceCustomer - b.hoursSinceCustomer);
     selected.clear();
-    items.filter((it) => canSend(it) && !it.alreadySent).forEach((it) => selected.add(it.psid));
+    // Tick san nguoi gui duoc; neu dang bat "Bo qua nguoi da nhan" thi khong tick ho
+    items.filter((it) => canSend(it) && !($('skipSent').checked && it.alreadySent)).forEach((it) => selected.add(it.psid));
     renderList();
   } catch (e) {
     if (seq !== loadSeq) return;
