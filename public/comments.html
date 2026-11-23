@@ -57,7 +57,7 @@
 
         <div class="opt-box">
           <label class="chk"><input type="checkbox" id="publicReply" checked /> <b>Trả lời công khai</b> dưới comment</label>
-          <textarea id="message" rows="3" placeholder="Dạ {{first_name}} kiểm tra tin nhắn giúp em với ạ, em nhắn cho mình rồi đó ạ!"></textarea>
+          <textarea id="message" rows="3" placeholder="{Dạ|Vâng} {{first_name}} {check|kiểm tra} {tin nhắn|inbox} giúp em {với ạ|nha}, em {nhắn|gửi} {cho mình|} rồi {đó ạ|nhé}!"></textarea>
         </div>
 
         <div class="opt-box">
@@ -69,8 +69,15 @@
         <div class="vars">
           Chèn:
           <button class="var-btn" data-var="{{first_name}}">Tên gọi</button>
-          <button class="var-btn" data-var="{{name}}">Họ tên đầy đủ</button>
+          <button class="var-btn" data-var="{{name}}">Họ tên</button>
+          <button class="var-btn spin-btn" id="btnChoice" title="Bôi đen một từ rồi bấm để thêm cách nói khác">🔀 Thêm lựa chọn</button>
         </div>
+        <p class="note" id="spinInfo"></p>
+
+        <label class="chk opt-box opt-row" title="Tick: comment đã rep công khai thì không rep lại, đã nhắn riêng thì không nhắn lại">
+          <input type="checkbox" id="skipReplied" />
+          <span>Bỏ qua việc đã làm <span class="tip">(đã rep thì không rep lại, đã nhắn riêng thì không nhắn lại)</span></span>
+        </label>
 
         <div class="send-dock">
           <button id="btnSend" class="btn primary big" disabled>Trả lời <span id="sendCount">0</span> comment</button>
@@ -92,7 +99,6 @@
               <input type="number" id="delaySec" value="1.5" min="0" step="0.1" /> <span class="tip">giây</span>
             </div>
           </div>
-          <label class="chk"><input type="checkbox" id="skipReplied" checked /> Không trả lời lại comment đã từng trả lời</label>
           <div class="setting-row"><button class="btn sm" id="btnResetLog">Xoá lịch sử đã trả lời</button></div>
         </div>
       </details>
@@ -101,6 +107,7 @@
 </main>
 
 <script src="common.js"></script>
+<script src="spin.js"></script>
 <script src="comments.js"></script>
 </body>
 </html>

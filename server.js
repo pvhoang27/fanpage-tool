@@ -7,6 +7,7 @@ const express = require('express');
 const fb = require('./lib/fb');
 const cmt = require('./lib/comments');
 const auth = require('./lib/auth');
+const Spin = require('./public/spin.js');
 const store = require('./lib/store');
 const order = require('./lib/order');
 
@@ -171,7 +172,8 @@ app.get('/api/conversations', async (req, res) => {
 
     const { pageId, conversations } = await fb.fetchConversations({ maxPages });
     const normalized = conversations.map((c) => fb.normalizeConversation(c, pageId));
-    const filtered = fb.filterStale(normalized, { minHours, maxHours, fromTs, toTs, lastFrom });
+    const by = req.query.by === 'customer' ? 'customer' : 'last';
+    const filtered = fb.filterStale(normalized, { minHours, maxHours, fromTs, toTs, lastFrom, by });
     const sentLog = store.getSentLog();
     const marks = store.getOrderMarks();
 
@@ -226,7 +228,8 @@ app.get('/api/conversations', async (req, res) => {
 
       return {
         ...rest,
-        alreadySent: Boolean(sentLog[it.psid]),
+        // "Da gui" = da nhan cho nguoi nay SAU lan cuoi ho nhan. Khach nhan lai -> gui tiep duoc.
+        alreadySent: sentAfterCustomer(sentLog[it.psid], it.lastCustomerTs),
         lastSentAt: sentLog[it.psid]?.at || null,
         canUseHumanAgentTag: it.hoursSinceLast <= 24 * 7,
         ordered,
@@ -261,6 +264,18 @@ app.get('/api/conversations', async (req, res) => {
     res.status(400).json(errPayload(e));
   }
 });
+
+/** Comment nay da duoc tool lam viec "kind" chua ('công khai' | 'tin nhắn riêng') */
+function didKind(entry, kind) {
+  return Boolean(entry && (entry.did || []).includes(kind));
+}
+
+/** Lan gui gan nhat co sau tin cuoi cua khach khong (khong biet tin cua khach -> coi nhu co) */
+function sentAfterCustomer(entry, lastCustomerTs) {
+  if (!entry?.at) return false;
+  if (!lastCustomerTs) return true;
+  return new Date(entry.at).getTime() > Number(lastCustomerTs);
+}
 
 /* ---------- Templates ---------- */
 app.get('/api/templates', (req, res) => res.json(store.getTemplates()));
@@ -323,13 +338,14 @@ app.post('/api/send-bulk', async (req, res) => {
       continue;
     }
 
-    if (skipAlreadySent && sentLog[t.psid]) {
+    if (skipAlreadySent && sentAfterCustomer(sentLog[t.psid], t.lastCustomerTs)) {
       skipped++;
-      write({ ...base, status: 'skipped', reason: `Da gui truoc do (${sentLog[t.psid].at})` });
+      write({ ...base, status: 'skipped', reason: 'Đã nhắn người này sau lần cuối họ nhắn' });
       continue;
     }
 
-    const body = text
+    // Xao rieng cho tung nguoi, roi dien ten
+    const body = Spin.spin(text)
       .replaceAll('{{name}}', t.name || 'bạn')
       .replaceAll('{{first_name}}', (t.name || 'bạn').split(' ').slice(-1)[0]);
 
@@ -344,7 +360,7 @@ app.post('/api/send-bulk', async (req, res) => {
       ok++;
       sentPsids.push(t.psid);
       store.markSent(t.psid, { name: t.name, messageId: r.message_id, tag: r.usedTag });
-      write({ ...base, status: 'ok', messageId: r.message_id, tag: r.usedTag, fellBackFrom: r.fellBackFrom });
+      write({ ...base, status: 'ok', text: body, messageId: r.message_id, tag: r.usedTag, fellBackFrom: r.fellBackFrom });
     } catch (e) {
       fail++;
       write({ ...base, status: 'error', ...errPayload(e) });
@@ -357,7 +373,7 @@ app.post('/api/send-bulk', async (req, res) => {
   // de mo Messenger ra la thay ngay ai da bi nhan.
   let labelled = null;
   const syncCfg = store.getLabelSync();
-  if (syncCfg.tagSent && sentPsids.length) {
+  if (syncCfg.tagSent && req.body?.tagSent !== false && sentPsids.length) {
     write({ status: 'labelling', total: sentPsids.length, label: syncCfg.sentLabelName });
     try {
       const labelId = await labelIdFor(syncCfg.sentLabelName);
@@ -452,10 +468,15 @@ app.get('/api/comments', async (req, res) => {
         ...c,
         alreadyReplied: Boolean(log[c.commentId]),
         repliedAt: log[c.commentId]?.at || null,
+        publicDone: didKind(log[c.commentId], 'công khai'),
+        privateDone: didKind(log[c.commentId], 'tin nhắn riêng'),
         canPrivateReply: c.hoursSince != null && c.hoursSince <= 24 * 7,
       }));
 
-    if (onlyUnreplied) list = list.filter((c) => !c.pageReplied);
+    // "Chua tra loi" = con viec chua lam: chua rep cong khai, hoac chua nhan rieng (khi con nhan duoc)
+    if (onlyUnreplied) {
+      list = list.filter((c) => !(c.pageReplied || c.publicDone) || (c.canPrivateReply && !c.privateDone));
+    }
     if (maxHours) list = list.filter((c) => c.hoursSince != null && c.hoursSince <= maxHours);
 
     list.sort((a, b) => b.hoursSince - a.hoursSince); // cu nhat truoc
@@ -512,7 +533,7 @@ app.post('/api/reply-comments', async (req, res) => {
   let skipped = 0;
 
   const fill = (tpl, name) =>
-    tpl
+    Spin.spin(tpl)
       .replaceAll('{{name}}', name || 'anh/chị')
       .replaceAll('{{first_name}}', (name || 'anh/chị').split(' ').slice(-1)[0]);
 
@@ -520,44 +541,62 @@ app.post('/api/reply-comments', async (req, res) => {
     const t = targets[i];
     const base = { index: i, total: targets.length, commentId: t.commentId, name: t.name };
 
-    if (skipAlreadyReplied && log[t.commentId]) {
-      skipped++;
-      write({ ...base, status: 'skipped', reason: `Đã trả lời trước đó (${log[t.commentId].at})` });
-      continue;
-    }
-
+    // Hai viec lam doc lap: tra loi cong khai va nhan rieng, moi viec co ket qua rieng.
+    // results: [{ kind: 'public'|'private', status: 'ok'|'skipped'|'error', note }]
+    const entry = log[t.commentId];
+    const results = [];
     const done = [];
-    const errors = [];
 
     if (publicReply) {
-      try {
-        const r = await cmt.replyToComment(t.commentId, fill(text, t.name));
-        done.push('công khai');
-        base.replyId = r.id;
-      } catch (e) {
-        errors.push(`công khai: ${e.message}`);
+      if (skipAlreadyReplied && didKind(entry, 'công khai')) {
+        results.push({ kind: 'public', status: 'skipped', note: 'đã rep rồi' });
+      } else {
+        try {
+          const r = await cmt.replyToComment(t.commentId, fill(text, t.name));
+          done.push('công khai');
+          base.replyId = r.id;
+          results.push({ kind: 'public', status: 'ok' });
+        } catch (e) {
+          results.push({ kind: 'public', status: 'error', note: e.message });
+        }
       }
     }
 
     if (sendPrivate) {
-      try {
-        await cmt.privateReply(t.commentId, fill(privateText || text, t.name));
-        done.push('tin nhắn riêng');
-      } catch (e) {
-        errors.push(`tin nhắn riêng: ${e.message}`);
+      // Facebook chi cho nhan rieng 1 lan moi comment -> da nhan thi luon bo qua
+      if (didKind(entry, 'tin nhắn riêng')) {
+        results.push({ kind: 'private', status: 'skipped', note: 'đã nhắn rồi — Facebook chỉ cho 1 lần' });
+      } else if (!t.canPrivateReply && t.canPrivateReply !== undefined) {
+        results.push({ kind: 'private', status: 'skipped', note: 'comment quá 7 ngày' });
+      } else {
+        try {
+          await cmt.privateReply(t.commentId, fill(privateText || text, t.name));
+          done.push('tin nhắn riêng');
+          results.push({ kind: 'private', status: 'ok' });
+        } catch (e) {
+          if (e.fbCode === 10900 || /already replied/i.test(e.message)) {
+            // Da nhan rieng tu truoc (bang tay hoac tool khac) -> ghi nho, khong tinh la loi
+            store.markCommentReplied(t.commentId, { name: t.name, did: ['tin nhắn riêng'] });
+            results.push({ kind: 'private', status: 'skipped', note: 'đã nhắn rồi — Facebook chỉ cho 1 lần' });
+          } else {
+            results.push({ kind: 'private', status: 'error', note: e.message });
+          }
+        }
       }
     }
 
-    if (done.length) {
-      ok++;
-      store.markCommentReplied(t.commentId, { name: t.name, did: done });
-      write({ ...base, status: 'ok', did: done, partialError: errors.length ? errors : undefined });
-    } else {
-      fail++;
-      write({ ...base, status: 'error', error: errors.join(' · ') });
-    }
+    if (done.length) store.markCommentReplied(t.commentId, { name: t.name, did: done });
 
-    if (delay && i < targets.length - 1) await new Promise((r) => setTimeout(r, delay));
+    const anyOk = results.some((r) => r.status === 'ok');
+    const anyErr = results.some((r) => r.status === 'error');
+    const status = anyOk ? 'ok' : anyErr ? 'error' : 'skipped';
+    if (status === 'ok') ok++;
+    else if (status === 'error') fail++;
+    else skipped++;
+    write({ ...base, status, results, did: done });
+
+    // Khong goi Facebook thi khong can nghi
+    if (delay && done.length && i < targets.length - 1) await new Promise((r) => setTimeout(r, delay));
   }
 
   write({ status: 'done', ok, fail, skipped, total: targets.length });

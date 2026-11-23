@@ -458,3 +458,15 @@ button.page-chip:hover { filter: brightness(.97); }
 .pm-sep { height: 1px; background: var(--line-soft); margin: 6px 0; }
 .pm-link { display: block; padding: 8px 10px; border-radius: 9px; color: var(--text); text-decoration: none; font-size: 14px; }
 .pm-link:hover { background: var(--line-soft); }
+
+/* ---------------- xao tin ---------------- */
+.preview-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.preview-head .preview-label { margin: 0; }
+.preview-head .btn { margin-left: auto; }
+.bubbles { display: flex; flex-direction: column; gap: 8px; }
+.bubble-row { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.bubble-row .who { font-size: 11.5px; color: var(--faint); }
+.var-btn.spin-btn { background: var(--green-soft); border-color: #a6dcb9; color: #0b6b35; }
+#message { font-family: inherit; }
+.opt-box.opt-row { flex-direction: row; align-items: flex-start; gap: 8px; cursor: pointer; }
+.opt-box.opt-row input { margin-top: 3px; flex: none; }

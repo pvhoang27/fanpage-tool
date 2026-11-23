@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Rep tin nhắn</title>
+<title>Xào tin nhắn</title>
 <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -18,53 +18,12 @@
       <span class="flabel">Khách nhắn trong</span>
       <div class="chips" id="rangeChips">
         <button class="chip" data-h="1">1 giờ</button>
+        <button class="chip" data-h="3">3 giờ</button>
         <button class="chip" data-h="6">6 giờ</button>
-        <button class="chip" data-h="24">24 giờ</button>
-        <button class="chip on" data-h="72">3 ngày</button>
-        <button class="chip" data-h="168">7 ngày</button>
-        <button class="chip" data-h="720">30 ngày</button>
-        <button class="chip" data-custom="1">📅 Chọn ngày…</button>
+        <button class="chip" data-h="12">12 giờ</button>
+        <button class="chip on" data-h="24">24 giờ</button>
       </div>
-      <div class="custom-range" id="customRange" hidden>
-        <input type="date" id="fromDate" />
-        <span>→</span>
-        <input type="date" id="toDate" />
-        <button class="btn sm primary" id="btnApplyDate">Xem</button>
-      </div>
-    </div>
-
-    <div class="frow">
-      <span class="flabel">Tin cuối là của</span>
-      <div class="seg" id="lastFromSeg">
-        <button data-v="customer" class="on">Khách — mình chưa rep</button>
-        <button data-v="page">Mình — đã rep rồi</button>
-        <button data-v="all">Tất cả</button>
-      </div>
-      <button class="btn sm ghost more-btn" id="btnMore">⚙ Lọc thêm <span class="count-pill" id="moreCount" hidden>0</span> ▾</button>
-    </div>
-
-    <div class="more-panel" id="morePanel" hidden>
-      <div class="frow">
-        <span class="flabel">Khách đã đặt hàng</span>
-        <div class="seg" id="orderSeg">
-          <button data-v="hide" class="on">Ẩn đi (nên dùng)</button>
-          <button data-v="only">Chỉ xem họ</button>
-          <button data-v="all">Hiện hết</button>
-        </div>
-        <span class="info" title="Tool đọc nội dung chat để đoán khách đã chốt đơn / đang chờ hàng (chuyển khoản, địa chỉ, mã vận đơn, shipper…). Đoán sai thì bấm nút đặt hàng trên từng khách để sửa.">?</span>
-      </div>
-
-      <div class="frow">
-        <span class="flabel">Bỏ qua nhãn</span>
-        <div class="label-list" id="skipLabelList"><span class="empty-note">Đang tải nhãn…</span></div>
-      </div>
-      <div class="frow">
-        <span class="flabel"></span>
-        <input type="text" id="newLabelName" placeholder="Tạo nhãn mới…" style="max-width:220px" />
-        <button class="btn sm" id="btnCreateLabel">＋ Tạo</button>
-        <label class="chk"><input type="checkbox" id="showSkipped" /> Vẫn hiện người bị bỏ qua (màu xám)</label>
-      </div>
-      <p class="note" id="labelStatus"></p>
+      <span class="info" title="Facebook chỉ cho Page nhắn khách trong 24 giờ, tính từ tin nhắn cuối cùng của KHÁCH. Quá 24 giờ thì không gửi được.">?</span>
     </div>
   </div>
 
@@ -84,10 +43,10 @@
       <div id="list" class="list"></div>
     </section>
 
-    <!-- ============ VIẾT TIN ============ -->
+    <!-- ============ XÀO TIN ============ -->
     <aside class="card sticky composer-col">
       <div class="card-head">
-        <h2 class="card-title">✉️ Viết tin nhắn</h2>
+        <h2 class="card-title">🔀 Xào tin nhắn</h2>
       </div>
 
       <div class="composer">
@@ -97,17 +56,24 @@
           <button class="btn sm ghost danger" id="btnDelTpl" title="Xoá câu mẫu đang chọn">🗑</button>
         </div>
 
-        <textarea id="message" rows="5" placeholder="Ví dụ: Chào {{first_name}}, shop xin lỗi vì trả lời muộn ạ. Mình còn cần tư vấn gì không ạ?"></textarea>
+        <textarea id="message" rows="5" placeholder="{Dạ chào|Em chào|Chào} {{first_name}} {ạ|nha}, shop {vừa về|mới có} {mẫu mới|hàng mới} nè!"></textarea>
 
         <div class="vars">
           Chèn:
           <button class="var-btn" data-var="{{first_name}}">Tên gọi</button>
-          <button class="var-btn" data-var="{{name}}">Họ tên đầy đủ</button>
+          <button class="var-btn" data-var="{{name}}">Họ tên</button>
+          <button class="var-btn spin-btn" id="btnChoice" title="Bôi đen một từ rồi bấm để thêm cách nói khác cho từ đó">🔀 Thêm lựa chọn</button>
+          <button class="var-btn" id="btnExample" title="Điền một câu ví dụ">💡 Ví dụ</button>
         </div>
 
+        <p class="note" id="spinInfo"></p>
+
         <div class="preview">
-          <div class="preview-label" id="previewLabel">Khách sẽ thấy:</div>
-          <div class="bubble empty-bubble" id="preview">Nội dung tin nhắn sẽ hiện ở đây</div>
+          <div class="preview-head">
+            <span class="preview-label" id="previewLabel">Khách sẽ nhận (ví dụ):</span>
+            <button class="btn xs" id="btnReshuffle">🔀 Xào lại</button>
+          </div>
+          <div class="bubbles" id="preview"></div>
         </div>
 
         <div class="send-dock">
@@ -124,53 +90,15 @@
       <details class="settings">
         <summary>⚙ Cài đặt gửi</summary>
         <div class="settings-body">
-
-          <div class="setting">
-            <span class="slabel">Khách nhắn quá 24 giờ</span>
-            <select id="tagMode">
-              <option value="none" selected>Không gửi (an toàn nhất)</option>
-              <option value="auto">Dùng Human Agent (app phải được Meta duyệt)</option>
-              <option value="ACCOUNT_UPDATE">ACCOUNT_UPDATE — chỉ báo tin tài khoản/đơn hàng</option>
-              <option value="POST_PURCHASE_UPDATE">POST_PURCHASE_UPDATE — chỉ cho khách đã mua</option>
-              <option value="CONFIRMED_EVENT_UPDATE">CONFIRMED_EVENT_UPDATE — chỉ cho lịch hẹn</option>
-            </select>
-            <p class="note warn" id="tagWarn" hidden>Dùng nhãn sai mục đích (ví dụ lấy nhãn đơn hàng để chào bán) là vi phạm chính sách Meta, Page có thể bị hạn chế.</p>
-          </div>
-
           <div class="setting">
             <span class="slabel">Nghỉ giữa mỗi tin</span>
             <div class="setting-row">
-              <input type="number" id="delaySec" value="1.2" min="0" step="0.1" /> <span class="tip">giây — nghỉ lâu hơn thì trông tự nhiên hơn</span>
-            </div>
-          </div>
-
-          <div class="setting">
-            <label class="chk"><input type="checkbox" id="skipSent" checked /> Không gửi lại người đã từng gửi</label>
-            <label class="chk"><input type="checkbox" id="skipOrdered" checked /> Chặn gửi cho khách đã đặt hàng (kể cả khi lỡ tick)</label>
-          </div>
-
-          <div class="subhead">Ghi nhãn lên Page Inbox</div>
-          <p class="tip">Khách không nhìn thấy nhãn — đây là ghi chú nội bộ của Page.</p>
-          <div class="setting">
-            <label class="chk"><input type="checkbox" id="syncOrderMark" /> Đánh dấu “đã đặt hàng” thì gắn nhãn</label>
-            <div class="setting-row">
-              <select id="orderLabelPick" class="label-pick"></select>
-              <input type="text" id="orderLabelName" placeholder="Tên nhãn mới…" hidden />
+              <input type="number" id="delaySec" value="2" min="0" step="0.5" /> <span class="tip">giây — nghỉ lâu hơn thì trông tự nhiên hơn</span>
             </div>
           </div>
           <div class="setting">
-            <label class="chk"><input type="checkbox" id="tagSent" /> Gửi xong thì gắn nhãn cho người nhận</label>
-            <div class="setting-row">
-              <select id="sentLabelPick" class="label-pick"></select>
-              <input type="text" id="sentLabelName" placeholder="Tên nhãn mới…" hidden />
-            </div>
-          </div>
-          <button class="btn sm" id="btnSaveSync">Lưu cài đặt nhãn</button>
-
-          <div class="subhead">Dọn dẹp</div>
-          <div class="setting-row">
-            <button class="btn sm" id="btnResetLog">Xoá lịch sử đã gửi</button>
-            <button class="btn sm" id="btnResetOrders">Xoá đánh dấu đặt hàng</button>
+            <label class="chk"><input type="checkbox" id="skipSent" checked /> Không nhắn lại người đã nhắn rồi (cho tới khi họ nhắn tiếp)</label>
+            <div class="setting-row"><button class="btn sm" id="btnResetLog">Xoá lịch sử đã gửi</button></div>
           </div>
         </div>
       </details>
@@ -179,6 +107,7 @@
 </main>
 
 <script src="common.js"></script>
+<script src="spin.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

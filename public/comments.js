@@ -1,4 +1,4 @@
-/* global document, fetch, $, esc, fmtAgo, toast, avatar, postJson, readStream, insertAtCursor, fillName, renderTopbar */
+/* global document, fetch, $, esc, fmtAgo, toast, avatar, postJson, readStream, insertAtCursor, fillName, renderTopbar, Spin, currentPageId */
 'use strict';
 
 /* Trang comment. Ham chung nam o common.js */
@@ -77,7 +77,8 @@ async function loadComments() {
     if (!r.ok) throw new Error(j.error);
     items = j.items;
     selected.clear();
-    items.filter((c) => !c.alreadyReplied).forEach((c) => selected.add(c.commentId));
+    // Tick san comment con viec chua lam
+    items.filter((c) => !c.publicDone || (c.canPrivateReply && !c.privateDone)).forEach((c) => selected.add(c.commentId));
     renderList();
   } catch (e) {
     items = [];
@@ -111,7 +112,8 @@ function renderList() {
 
     let tags = '';
     if (c.pageReplied) tags += '<span class="badge no">Page đã rep trên Facebook</span>';
-    if (c.alreadyReplied) tags += '<span class="badge sent">✓ Tool đã trả lời</span>';
+    if (c.publicDone) tags += '<span class="badge sent">✓ Đã rep công khai</span>';
+    if (c.privateDone) tags += '<span class="badge sent">✓ Đã nhắn riêng</span>';
     if (!c.canPrivateReply) tags += '<span class="badge no">Quá 7 ngày — không nhắn riêng được</span>';
 
     el.innerHTML = `
@@ -175,6 +177,7 @@ async function loadTemplates(selectId) {
 $('tplSelect').onchange = () => {
   const t = templates.find((x) => x.id === $('tplSelect').value);
   if (t) $('message').value = t.text;
+  updateSpinInfo();
 };
 
 async function saveTemplates(selectId) {
@@ -214,12 +217,43 @@ $('sendPrivate').onchange = () => {
 };
 $('message').onfocus = () => { lastFocused = 'message'; };
 $('privateMessage').onfocus = () => { lastFocused = 'privateMessage'; };
-document.querySelectorAll('.var-btn').forEach((b) => {
+document.querySelectorAll('.var-btn[data-var]').forEach((b) => {
   b.onclick = () => {
     const ta = $(lastFocused);
     insertAtCursor(ta.hidden ? $('message') : ta, b.dataset.var);
   };
 });
+
+/* Boi den 1 tu roi bam -> {tu do|}, con tro dat san de go cach noi khac */
+$('btnChoice').onclick = () => {
+  let ta = $(lastFocused);
+  if (ta.hidden) ta = $('message');
+  const s = ta.selectionStart ?? ta.value.length;
+  const e = ta.selectionEnd ?? ta.value.length;
+  const ins = `{${ta.value.slice(s, e)}|}`;
+  ta.value = ta.value.slice(0, s) + ins + ta.value.slice(e);
+  ta.focus();
+  ta.selectionStart = ta.selectionEnd = s + ins.length - 1;
+  updateSpinInfo();
+};
+
+function updateSpinInfo() {
+  const text = $('message').value.trim() || $('privateMessage').value.trim();
+  const n = text ? Spin.variants(text) : 0;
+  const info = $('spinInfo');
+  if (!text) {
+    info.className = 'note';
+    info.innerHTML = 'Viết <code>{Dạ|Vâng}</code> → mỗi comment nhận một cách nói ngẫu nhiên, đỡ giống bot.';
+  } else if (n > 1) {
+    info.className = 'note ok';
+    info.innerHTML = `🔀 Xào ra được <b>${n === Infinity ? 'rất nhiều' : n.toLocaleString('vi-VN')}</b> kiểu. Ví dụ: “${esc(fillName(Spin.spin(text), 'Nguyễn Văn An'))}”`;
+  } else {
+    info.className = 'note warn';
+    info.innerHTML = '⚠️ Chưa xào — ai cũng nhận y hệt. Bôi đen một từ rồi bấm <b>🔀 Thêm lựa chọn</b>.';
+  }
+}
+$('message').addEventListener('input', updateSpinInfo);
+$('privateMessage').addEventListener('input', updateSpinInfo);
 
 /* ======================= gui ======================= */
 
@@ -262,7 +296,7 @@ $('btnSend').onclick = async () => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        targets: targets.map((c) => ({ commentId: c.commentId, name: c.name })),
+        targets: targets.map((c) => ({ commentId: c.commentId, name: c.name, canPrivateReply: c.canPrivateReply })),
         pageId: currentPageId,
         text,
         privateText,
@@ -296,14 +330,13 @@ function handleEvent(ev) {
 
   setBar(ev.index + 1, ev.total);
   $('stats').textContent = `Đang xử lý ${ev.index + 1}/${ev.total}…`;
-  if (ev.status === 'ok') {
-    log(`✓ ${ev.name} (${ev.did.join(' + ')})` + (ev.partialError ? ` — lỗi: ${ev.partialError.join('; ')}` : ''),
-      ev.partialError ? 'skipped' : 'ok');
-  } else if (ev.status === 'skipped') {
-    log(`− ${ev.name}: ${ev.reason}`, 'skipped');
-  } else {
-    log(`✗ ${ev.name}: ${ev.error}`, 'error');
-  }
+
+  // Moi viec (rep cong khai / nhan rieng) mot ket qua rieng
+  const label = { public: 'rep công khai', private: 'nhắn riêng' };
+  const icon = { ok: '✓', skipped: '−', error: '✗' };
+  const parts = (ev.results || []).map((r) => `${icon[r.status]} ${label[r.kind]}${r.note ? ` (${r.note})` : ''}`);
+  const cls = ev.status === 'error' ? 'error' : ev.results?.some((r) => r.status === 'error') ? 'skipped' : ev.status === 'ok' ? 'ok' : 'skipped';
+  log(`${ev.name}: ${parts.join(' · ') || ev.reason || ev.error || ''}`, cls);
 }
 
 /* ======================= don dep ======================= */
@@ -319,3 +352,4 @@ $('btnResetLog').onclick = async () => {
 
 loadPosts();
 loadTemplates();
+updateSpinInfo();
