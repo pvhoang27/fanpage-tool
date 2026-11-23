@@ -307,6 +307,10 @@ app.post('/api/send-bulk', async (req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
   res.flushHeaders?.();
 
+  // Dang gui thi khong cho doi Page (token doi giua chung -> gui nham Page)
+  activeJobs++;
+  try {
+
   const write = (obj) => res.write(JSON.stringify(obj) + '\n');
   const sentLog = store.getSentLog();
   const marks = store.getOrderMarks();
@@ -388,6 +392,9 @@ app.post('/api/send-bulk', async (req, res) => {
 
   write({ status: 'done', ok, fail, skipped, total: targets.length, labelled });
   res.end();
+  } finally {
+    activeJobs--;
+  }
 });
 
 /* ---------- Danh dau / bo danh dau khach da dat hang ---------- */
@@ -524,6 +531,10 @@ app.post('/api/reply-comments', async (req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
   res.flushHeaders?.();
 
+  // Dang gui thi khong cho doi Page (token doi giua chung -> gui nham Page)
+  activeJobs++;
+  try {
+
   const write = (obj) => res.write(JSON.stringify(obj) + '\n');
   const log = store.getCommentLog();
   const delay = Math.max(0, Number(delayMs) || 0);
@@ -601,6 +612,9 @@ app.post('/api/reply-comments', async (req, res) => {
 
   write({ status: 'done', ok, fail, skipped, total: targets.length });
   res.end();
+  } finally {
+    activeJobs--;
+  }
 });
 
 app.post('/api/reset-comment-log', (req, res) => {
@@ -646,7 +660,14 @@ app.get('/api/pages', async (req, res) => {
   res.json(pages.map((p) => ({ id: p.id, name: p.name || 'Page ' + p.id, active: p.id === active })));
 });
 
+/** So luot gui (tin nhan / comment) dang chay */
+let activeJobs = 0;
+app.get('/api/jobs', (req, res) => res.json({ active: activeJobs }));
+
 app.post('/api/pages/switch', (req, res) => {
+  if (activeJobs > 0) {
+    return res.status(409).json({ error: 'Đang có lượt gửi chạy dở — đợi gửi xong (hoặc dừng) rồi mới đổi Page được.' });
+  }
   const id = String(req.body?.id || '');
   const p = store.getPages().find((x) => x.id === id);
   if (!p) return res.status(404).json({ error: 'Không thấy Page này trong danh sách đã kết nối' });
