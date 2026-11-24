@@ -30,26 +30,41 @@ document.querySelectorAll('#rangeChips .chip').forEach((chip) => {
 
 $('btnReload').onclick = () => loadConversations();
 
-// Bat/tat "Bo qua nguoi da nhan": bo tick / tick lai nhung nguoi da nhan
-$('skipSent').onchange = () => {
-  items.filter((it) => it.alreadySent && canSend(it)).forEach((it) => {
-    $('skipSent').checked ? selected.delete(it.psid) : selected.add(it.psid);
+// "Khong nhan khach da gui SDT" — mac dinh bat, nho lua chon tren may nay
+try { const v = localStorage.getItem('skipPhone'); if (v !== null) $('skipPhone').checked = v === '1'; } catch { /* khong sao */ }
+
+/** Ly do KHONG nhan nguoi nay (null = se nhan) */
+function skipReason(it) {
+  if (!canSend(it)) return 'Quá 24 giờ — Facebook không cho gửi';
+  if ($('skipPhone').checked && it.customerPhone) return `Đã gửi SĐT ${it.customerPhone}`;
+  if ($('skipSent').checked && it.alreadySent) return 'Đã nhắn sau tin cuối của khách';
+  return null;
+}
+const willSend = (it) => !skipReason(it);
+
+/** Doi o tick -> ai vua thanh "se nhan" thi tick san, ai vua bi loai thi bo tick */
+let eligibleBefore = new Set();
+function onRuleChange() {
+  items.forEach((it) => {
+    if (!willSend(it)) selected.delete(it.psid);
+    else if (!eligibleBefore.has(it.psid)) selected.add(it.psid);
   });
   renderList();
-};
-// "Bo qua khach da gui SDT" — mac dinh bat, nho lua chon tren may nay
-try { const v = localStorage.getItem('skipPhone'); if (v !== null) $('skipPhone').checked = v === '1'; } catch { /* khong sao */ }
+}
 $('skipPhone').onchange = () => {
   try { localStorage.setItem('skipPhone', $('skipPhone').checked ? '1' : '0'); } catch { /* khong sao */ }
-  items.filter((it) => it.customerPhone && canSend(it)).forEach((it) => {
-    $('skipPhone').checked ? selected.delete(it.psid) : selected.add(it.psid);
-  });
-  renderList();
+  onRuleChange();
 };
+$('skipSent').onchange = onRuleChange;
 
-/** Nguoi nay co bi bo qua theo cac o tick khong */
-const skippedByOpts = (it) =>
-  ($('skipSent').checked && it.alreadySent) || ($('skipPhone').checked && it.customerPhone);
+let tab = 'send';
+document.querySelectorAll('#listTabs .chip').forEach((chip) => {
+  chip.onclick = () => {
+    tab = chip.dataset.tab;
+    document.querySelectorAll('#listTabs .chip').forEach((c) => c.classList.toggle('on', c === chip));
+    renderList();
+  };
+});
 
 $('search').oninput = () => { query = $('search').value.trim().toLowerCase(); renderList(); };
 
@@ -82,7 +97,7 @@ async function loadConversations() {
     items = j.items.sort((a, b) => a.hoursSinceCustomer - b.hoursSinceCustomer);
     selected.clear();
     // Tick san nguoi gui duoc; neu dang bat "Bo qua nguoi da nhan" thi khong tick ho
-    items.filter((it) => canSend(it) && !skippedByOpts(it)).forEach((it) => selected.add(it.psid));
+    items.filter(willSend).forEach((it) => selected.add(it.psid));
     renderList();
   } catch (e) {
     if (seq !== loadSeq) return;
@@ -94,8 +109,9 @@ async function loadConversations() {
 }
 
 function visibleItems() {
-  if (!query) return items;
-  return items.filter((it) =>
+  const inTab = items.filter((it) => (tab === 'send') === willSend(it));
+  if (!query) return inTab;
+  return inTab.filter((it) =>
     `${it.name} ${it.lastCustomerMessage || ''} ${it.lastMessage || ''}`.toLowerCase().includes(query)
   );
 }
@@ -104,11 +120,15 @@ function renderList() {
   const box = $('list');
   box.innerHTML = '';
   const list = visibleItems();
+  eligibleBefore = new Set(items.filter(willSend).map((it) => it.psid));
+  $('btnAll').hidden = $('btnNone').hidden = tab !== 'send';
 
   if (!list.length) {
     box.innerHTML = query
       ? `<div class="empty"><span class="big-emoji">🔍</span>Không có khách nào khớp “${esc(query)}”.</div>`
-      : `<div class="empty"><span class="big-emoji">💤</span>Không có khách nào nhắn trong ${rangeHours} giờ qua.</div>`;
+      : tab === 'skip'
+        ? `<div class="empty"><span class="big-emoji">✅</span>Không có ai bị loại — ai trong ${rangeHours} giờ qua cũng sẽ được nhắn.</div>`
+        : `<div class="empty"><span class="big-emoji">💤</span>Không còn khách nào để nhắn trong ${rangeHours} giờ qua.</div>`;
     updateSummary();
     return;
   }
@@ -118,15 +138,16 @@ function renderList() {
 }
 
 function renderItem(it) {
-  const ok = canSend(it);
+  const why = skipReason(it);
+  const ok = !why;
   const el = document.createElement('div');
   el.className = 'item' + (selected.has(it.psid) ? ' checked' : '') + (ok ? '' : ' blocked');
 
   let tags = '';
-  if (it.customerPhone) tags += `<span class="badge order" title="Khách đã gửi số này — thường là đã chốt đơn">📞 Đã gửi SĐT ${esc(it.customerPhone)}</span>`;
-  if (it.alreadySent) tags += '<span class="badge sent">✓ Đã nhắn sau tin cuối của khách</span>';
+  if (it.customerPhone && !why) tags += `<span class="badge order" title="Khách đã gửi số này — thường là đã chốt đơn">📞 Đã gửi SĐT ${esc(it.customerPhone)}</span>`;
+  if (it.alreadySent && !why) tags += '<span class="badge sent">✓ Đã nhắn sau tin cuối của khách</span>';
   if (it.lastFromPage) tags += '<span class="badge no">Mình đã rep</span>';
-  if (!ok) tags += '<span class="badge no">Quá 24 giờ — Facebook không cho gửi</span>';
+  if (why) tags = `<span class="badge skipwhy">🚫 Không nhắn: ${esc(why)}</span>` + tags;
 
   const left = 24 - (it.hoursSinceCustomer ?? 24);
   const leftTxt = ok && left < 3 ? ` · <span style="color:var(--amber)">còn ${left < 1 ? Math.max(1, Math.round(left * 60)) + ' phút' : Math.floor(left) + ' giờ'}</span>` : '';
@@ -156,18 +177,17 @@ function renderItem(it) {
 }
 
 function updateSummary() {
-  const sent = items.filter((it) => it.alreadySent).length;
-  const phones = items.filter((it) => it.customerPhone).length;
+  const nSend = items.filter(willSend).length;
+  $('cntSend').textContent = String(nSend);
+  $('cntSkip').textContent = String(items.length - nSend);
   $('summary').innerHTML = items.length
-    ? `<b>${items.length}</b> khách nhắn trong ${rangeHours} giờ qua · đã chọn <b class="g">${selected.size}</b>` +
-      (phones ? ` · ${phones} người đã gửi SĐT` : '') +
-      (sent ? ` · ${sent} người đã nhắn rồi` : '')
+    ? `<b>${items.length}</b> khách nhắn trong ${rangeHours} giờ qua · đã chọn <b class="g">${selected.size}</b> người để nhắn`
     : `Không có khách nào trong ${rangeHours} giờ qua`;
   updatePreview();
 }
 
 $('btnAll').onclick = () => {
-  visibleItems().filter((it) => canSend(it) && !skippedByOpts(it)).forEach((it) => selected.add(it.psid));
+  visibleItems().filter(willSend).forEach((it) => selected.add(it.psid));
   renderList();
 };
 $('btnNone').onclick = () => { selected.clear(); renderList(); };
@@ -302,7 +322,7 @@ function setBar(done, total) {
 $('btnSend').onclick = async () => {
   const text = $('message').value.trim();
   if (!text) return toast('Bạn chưa viết nội dung tin nhắn.', 'err');
-  const targets = items.filter((i) => selected.has(i.psid) && canSend(i));
+  const targets = items.filter((i) => selected.has(i.psid) && willSend(i));
   const n = Spin.variants(text);
   const note = n > 1 ? `Mỗi người nhận một câu xào khác nhau (${n === Infinity ? 'rất nhiều' : n} kiểu).` : 'Ai cũng nhận y hệt một câu.';
   if (!confirm(`Gửi cho ${targets.length} khách?\n${note}\n\nVí dụ: ${fillName(Spin.spin(text), targets[0]?.name)}`)) return;

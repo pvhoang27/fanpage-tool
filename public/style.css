@@ -222,6 +222,11 @@ a.cta.light:hover { background: #f9fafb; }
 .summary { font-size: 14px; color: var(--muted); margin: 0; }
 .summary b { color: var(--text); }
 .summary .g { color: var(--green); }
+.list-head.rules { gap: 6px 18px; font-size: 14px; background: #fafbfc; }
+.list-head.rules .muted { color: var(--muted); font-size: 13px; }
+.list-head.tabs-row { padding-top: 10px; padding-bottom: 10px; }
+#listTabs .chip b { font-weight: 700; margin-left: 2px; }
+.badge.skipwhy { background: var(--red-soft); color: var(--red); }
 
 .list { max-height: calc(100vh - 300px); min-height: 220px; overflow-y: auto; }
 .list.short { max-height: calc(100vh - 170px); }

@@ -34,6 +34,22 @@
       <div class="list-head">
         <p class="summary" id="summary">Đang tải…</p>
       </div>
+      <div class="list-head rules">
+        <label class="chk" title="Khách đã tự gửi số điện thoại thường là đã chốt đơn. Số do shop gửi (số tư vấn) không tính.">
+          <input type="checkbox" id="skipPhone" checked />
+          <span>Không nhắn khách đã gửi SĐT</span>
+        </label>
+        <label class="chk" title="Người đã được nhắn sau tin cuối của họ thì không nhắn nữa, cho tới khi họ nhắn tiếp">
+          <input type="checkbox" id="skipSent" />
+          <span>Không nhắn lại người đã nhắn rồi <span class="muted">(cho tới khi họ nhắn tiếp)</span></span>
+        </label>
+      </div>
+      <div class="list-head tabs-row">
+        <div class="chips" id="listTabs">
+          <button class="chip on" data-tab="send">📨 Sẽ nhắn <b id="cntSend">0</b></button>
+          <button class="chip" data-tab="skip">🚫 Không nhắn <b id="cntSkip">0</b></button>
+        </div>
+      </div>
       <div class="list-head">
         <input type="search" class="search" id="search" placeholder="Tìm theo tên hoặc nội dung…" />
         <button class="btn sm" id="btnAll">Chọn hết</button>
@@ -75,16 +91,6 @@
           </div>
           <div class="bubbles" id="preview"></div>
         </div>
-
-        <label class="chk opt-box opt-row" title="Tick: khách đã tự gửi số điện thoại (thường là đã chốt đơn) thì không nhắn. Số do shop gửi không tính.">
-          <input type="checkbox" id="skipPhone" checked />
-          <span>Không nhắn khách đã gửi số điện thoại <span class="tip">(thường là đã chốt đơn — số shop tự gửi không tính)</span></span>
-        </label>
-
-        <label class="chk opt-box opt-row" title="Tick: người đã được nhắn sau tin cuối của họ thì không nhắn nữa, cho tới khi họ nhắn tiếp">
-          <input type="checkbox" id="skipSent" />
-          <span>Không nhắn lại người đã nhắn rồi <span class="tip">(cho tới khi họ nhắn tiếp)</span></span>
-        </label>
 
         <div class="send-dock">
           <button id="btnSend" class="btn primary big" disabled>Gửi cho <span id="sendCount">0</span> người</button>
