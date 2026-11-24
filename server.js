@@ -204,6 +204,7 @@ app.get('/api/conversations', async (req, res) => {
     let items = filtered.map((it) => {
       const { messages, ...rest } = it;
       const detected = order.detectOrder(messages);
+      const customerPhone = order.findCustomerPhone(messages);
       const mark = marks[it.psid];
 
       // Gop nhan doc tu Facebook (neu doc duoc) voi nhan tool da gan
@@ -240,6 +241,8 @@ app.get('/api/conversations', async (req, res) => {
         orderMarkedAt: mark?.at || null,
         labels,
         skipLabels: skipHits.map((l) => l.name),
+        // SDT do khach gui (khong tinh so shop gui) — thuong la da chot don
+        customerPhone,
       };
     });
 
@@ -293,6 +296,7 @@ app.post('/api/send-bulk', async (req, res) => {
     delayMs = 1200,
     skipAlreadySent = true,
     skipOrdered = true,
+    skipHasPhone = false,
     tagMode = 'auto',
     fallbackTag = null,
   } = req.body || {};
@@ -339,6 +343,12 @@ app.post('/api/send-bulk', async (req, res) => {
     if (hit || (Array.isArray(t.skipLabels) && t.skipLabels.length)) {
       skipped++;
       write({ ...base, status: 'skipped', reason: `Mang nhãn bỏ qua: ${hit ? hit[1].name : t.skipLabels.join(', ')}` });
+      continue;
+    }
+
+    if (skipHasPhone && t.customerPhone) {
+      skipped++;
+      write({ ...base, status: 'skipped', reason: `Khách đã gửi SĐT ${t.customerPhone} — chắc đã chốt đơn` });
       continue;
     }
 

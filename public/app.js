@@ -37,6 +37,20 @@ $('skipSent').onchange = () => {
   });
   renderList();
 };
+// "Bo qua khach da gui SDT" — mac dinh bat, nho lua chon tren may nay
+try { const v = localStorage.getItem('skipPhone'); if (v !== null) $('skipPhone').checked = v === '1'; } catch { /* khong sao */ }
+$('skipPhone').onchange = () => {
+  try { localStorage.setItem('skipPhone', $('skipPhone').checked ? '1' : '0'); } catch { /* khong sao */ }
+  items.filter((it) => it.customerPhone && canSend(it)).forEach((it) => {
+    $('skipPhone').checked ? selected.delete(it.psid) : selected.add(it.psid);
+  });
+  renderList();
+};
+
+/** Nguoi nay co bi bo qua theo cac o tick khong */
+const skippedByOpts = (it) =>
+  ($('skipSent').checked && it.alreadySent) || ($('skipPhone').checked && it.customerPhone);
+
 $('search').oninput = () => { query = $('search').value.trim().toLowerCase(); renderList(); };
 
 /* ======================= tai danh sach ======================= */
@@ -68,7 +82,7 @@ async function loadConversations() {
     items = j.items.sort((a, b) => a.hoursSinceCustomer - b.hoursSinceCustomer);
     selected.clear();
     // Tick san nguoi gui duoc; neu dang bat "Bo qua nguoi da nhan" thi khong tick ho
-    items.filter((it) => canSend(it) && !($('skipSent').checked && it.alreadySent)).forEach((it) => selected.add(it.psid));
+    items.filter((it) => canSend(it) && !skippedByOpts(it)).forEach((it) => selected.add(it.psid));
     renderList();
   } catch (e) {
     if (seq !== loadSeq) return;
@@ -109,6 +123,7 @@ function renderItem(it) {
   el.className = 'item' + (selected.has(it.psid) ? ' checked' : '') + (ok ? '' : ' blocked');
 
   let tags = '';
+  if (it.customerPhone) tags += `<span class="badge order" title="Khách đã gửi số này — thường là đã chốt đơn">📞 Đã gửi SĐT ${esc(it.customerPhone)}</span>`;
   if (it.alreadySent) tags += '<span class="badge sent">✓ Đã nhắn sau tin cuối của khách</span>';
   if (it.lastFromPage) tags += '<span class="badge no">Mình đã rep</span>';
   if (!ok) tags += '<span class="badge no">Quá 24 giờ — Facebook không cho gửi</span>';
@@ -142,15 +157,17 @@ function renderItem(it) {
 
 function updateSummary() {
   const sent = items.filter((it) => it.alreadySent).length;
+  const phones = items.filter((it) => it.customerPhone).length;
   $('summary').innerHTML = items.length
     ? `<b>${items.length}</b> khách nhắn trong ${rangeHours} giờ qua · đã chọn <b class="g">${selected.size}</b>` +
+      (phones ? ` · ${phones} người đã gửi SĐT` : '') +
       (sent ? ` · ${sent} người đã nhắn rồi` : '')
     : `Không có khách nào trong ${rangeHours} giờ qua`;
   updatePreview();
 }
 
 $('btnAll').onclick = () => {
-  visibleItems().filter(canSend).forEach((it) => selected.add(it.psid));
+  visibleItems().filter((it) => canSend(it) && !skippedByOpts(it)).forEach((it) => selected.add(it.psid));
   renderList();
 };
 $('btnNone').onclick = () => { selected.clear(); renderList(); };
@@ -306,11 +323,13 @@ $('btnSend').onclick = async () => {
           name: t.name,
           hoursSinceLast: t.hoursSinceCustomer, // cua so 24h tinh theo tin cua khach
           lastCustomerTs: t.lastCustomerTs,
+          customerPhone: t.customerPhone || null,
         })),
         pageId: currentPageId,
         text,
         delayMs: Math.round(Number($('delaySec').value || 0) * 1000),
         skipAlreadySent: $('skipSent').checked,
+        skipHasPhone: $('skipPhone').checked,
         skipOrdered: false,
         tagMode: 'none',
         tagSent: false,
