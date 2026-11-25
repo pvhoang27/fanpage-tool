@@ -154,6 +154,27 @@ app.post('/api/order-labels', (req, res) => {
   res.json({ ok: true, orderLabelIds: store.saveOrderLabelIds(ids) });
 });
 
+/**
+ * Tim "#chotdon" (Page gui) va SDT (khach gui) trong cac hoi thoai vua tai,
+ * ghi vao data/chotdon.json + data/phones.json de nho vinh vien.
+ */
+function rememberOrderSigns(normalized, pageId) {
+  const chotDon = store.addChotDon(
+    normalized
+      .map((c) => ({ psid: c.psid, at: order.findChotDon(c.messages), name: c.name, pageId }))
+      .filter((c) => c.at)
+  );
+  const phones = store.addPhones(
+    normalized
+      .map((c) => {
+        const hit = order.findCustomerPhoneMsg(c.messages);
+        return hit && { psid: c.psid, phone: hit.phone, at: hit.time, name: c.name, pageId };
+      })
+      .filter(Boolean)
+  );
+  return { chotDon, phones };
+}
+
 /* ---------- Danh sach hoi thoai lau chua rep ---------- */
 app.get('/api/conversations', async (req, res) => {
   try {
@@ -177,12 +198,8 @@ app.get('/api/conversations', async (req, res) => {
     const sentLog = store.getSentLog();
     const marks = store.getOrderMarks();
 
-    // Quet "#chotdon" tren MOI hoi thoai tai ve (ke ca ngoai khung gio dang xem) roi nho lai vinh vien
-    const chotDon = store.addChotDon(
-      normalized
-        .map((c) => ({ psid: c.psid, at: order.findChotDon(c.messages), name: c.name, pageId }))
-        .filter((c) => c.at)
-    );
+    // Quet "#chotdon" + SDT khach gui tren MOI hoi thoai tai ve roi nho lai vinh vien
+    const { chotDon, phones } = rememberOrderSigns(normalized, pageId);
 
     // Nhan cua Page Inbox — chi doc duoc khi app du quyen, khong thi bo qua
     let labelsByPsid = {};
@@ -211,7 +228,8 @@ app.get('/api/conversations', async (req, res) => {
     let items = filtered.map((it) => {
       const { messages, ...rest } = it;
       const detected = order.detectOrder(messages);
-      const customerPhone = order.findCustomerPhone(messages);
+      // SDT: so thay trong tin gan nhat, khong thay thi lay so da nho tu truoc (tin co so da troi di)
+      const customerPhone = order.findCustomerPhone(messages) || phones[it.psid]?.phone || null;
       const mark = marks[it.psid];
 
       // Gop nhan doc tu Facebook (neu doc duoc) voi nhan tool da gan
@@ -330,16 +348,13 @@ app.post('/api/send-bulk', async (req, res) => {
   const marks = store.getOrderMarks();
   const skipIds = new Set((store.getSkipLabelIds() || []).map(String));
   const localLabels = store.getUserLabels();
-  // Quet lai "#chotdon" ngay truoc khi gui: phong khi vua chot don ma danh sach tren may chua tai lai
+  // Quet lai "#chotdon" + SDT ngay truoc khi gui: phong khi vua chot don / khach vua gui so
+  // ma danh sach tren may chua tai lai
   let chotDon = store.getChotDon();
+  let phones = store.getPhones();
   try {
     const { pageId: pid, conversations } = await fb.fetchConversations({ maxPages: 5 });
-    chotDon = store.addChotDon(
-      conversations
-        .map((c) => fb.normalizeConversation(c, pid))
-        .map((c) => ({ psid: c.psid, at: order.findChotDon(c.messages), name: c.name, pageId: pid }))
-        .filter((c) => c.at)
-    );
+    ({ chotDon, phones } = rememberOrderSigns(conversations.map((c) => fb.normalizeConversation(c, pid)), pid));
   } catch { /* loi mang thi dung ban da nho */ }
   const delay = Math.max(0, Number(delayMs) || 0);
 
@@ -374,9 +389,10 @@ app.post('/api/send-bulk', async (req, res) => {
       continue;
     }
 
-    if (skipHasPhone && t.customerPhone) {
+    const phone = phones[t.psid]?.phone || t.customerPhone;
+    if (skipHasPhone && phone) {
       skipped++;
-      write({ ...base, status: 'skipped', reason: `Khách đã gửi SĐT ${t.customerPhone} — chắc đã chốt đơn` });
+      write({ ...base, status: 'skipped', reason: `Khách đã gửi SĐT ${phone} — chắc đã chốt đơn` });
       continue;
     }
 
