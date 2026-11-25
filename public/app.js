@@ -32,10 +32,12 @@ $('btnReload').onclick = () => loadConversations();
 
 // "Khong nhan khach da gui SDT" — mac dinh bat, nho lua chon tren may nay
 try { const v = localStorage.getItem('skipPhone'); if (v !== null) $('skipPhone').checked = v === '1'; } catch { /* khong sao */ }
+try { const v = localStorage.getItem('skipChot'); if (v !== null) $('skipChot').checked = v === '1'; } catch { /* khong sao */ }
 
 /** Ly do KHONG nhan nguoi nay (null = se nhan) */
 function skipReason(it) {
   if (!canSend(it)) return 'Quá 24 giờ — Facebook không cho gửi';
+  if ($('skipChot').checked && it.chotDonAt) return `Đã #chotdon ${new Date(it.chotDonAt).toLocaleDateString('vi-VN')}`;
   if ($('skipPhone').checked && it.customerPhone) return `Đã gửi SĐT ${it.customerPhone}`;
   if ($('skipSent').checked && it.alreadySent) return 'Đã nhắn sau tin cuối của khách';
   return null;
@@ -53,6 +55,10 @@ function onRuleChange() {
 }
 $('skipPhone').onchange = () => {
   try { localStorage.setItem('skipPhone', $('skipPhone').checked ? '1' : '0'); } catch { /* khong sao */ }
+  onRuleChange();
+};
+$('skipChot').onchange = () => {
+  try { localStorage.setItem('skipChot', $('skipChot').checked ? '1' : '0'); } catch { /* khong sao */ }
   onRuleChange();
 };
 $('skipSent').onchange = onRuleChange;
@@ -144,6 +150,7 @@ function renderItem(it) {
   el.className = 'item' + (selected.has(it.psid) ? ' checked' : '') + (ok ? '' : ' blocked');
 
   let tags = '';
+  if (it.chotDonAt && !why) tags += '<span class="badge order" title="Page đã nhắn #chotdon cho khách này">✅ Đã #chotdon</span>';
   if (it.customerPhone && !why) tags += `<span class="badge order" title="Khách đã gửi số này — thường là đã chốt đơn">📞 Đã gửi SĐT ${esc(it.customerPhone)}</span>`;
   if (it.alreadySent && !why) tags += '<span class="badge sent">✓ Đã nhắn sau tin cuối của khách</span>';
   if (it.lastFromPage) tags += '<span class="badge no">Mình đã rep</span>';
@@ -344,12 +351,14 @@ $('btnSend').onclick = async () => {
           hoursSinceLast: t.hoursSinceCustomer, // cua so 24h tinh theo tin cua khach
           lastCustomerTs: t.lastCustomerTs,
           customerPhone: t.customerPhone || null,
+          chotDonAt: t.chotDonAt || null,
         })),
         pageId: currentPageId,
         text,
         delayMs: Math.round(Number($('delaySec').value || 0) * 1000),
         skipAlreadySent: $('skipSent').checked,
         skipHasPhone: $('skipPhone').checked,
+        skipChotDon: $('skipChot').checked,
         skipOrdered: false,
         tagMode: 'none',
         tagSent: false,

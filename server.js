@@ -177,6 +177,13 @@ app.get('/api/conversations', async (req, res) => {
     const sentLog = store.getSentLog();
     const marks = store.getOrderMarks();
 
+    // Quet "#chotdon" tren MOI hoi thoai tai ve (ke ca ngoai khung gio dang xem) roi nho lai vinh vien
+    const chotDon = store.addChotDon(
+      normalized
+        .map((c) => ({ psid: c.psid, at: order.findChotDon(c.messages), name: c.name, pageId }))
+        .filter((c) => c.at)
+    );
+
     // Nhan cua Page Inbox — chi doc duoc khi app du quyen, khong thi bo qua
     let labelsByPsid = {};
     let labelInfo = { available: false };
@@ -243,6 +250,8 @@ app.get('/api/conversations', async (req, res) => {
         skipLabels: skipHits.map((l) => l.name),
         // SDT do khach gui (khong tinh so shop gui) — thuong la da chot don
         customerPhone,
+        // Page da nhan "#chotdon" cho khach nay (thoi diem), null neu chua
+        chotDonAt: chotDon[it.psid]?.at || null,
       };
     });
 
@@ -297,6 +306,7 @@ app.post('/api/send-bulk', async (req, res) => {
     skipAlreadySent = true,
     skipOrdered = true,
     skipHasPhone = false,
+    skipChotDon = true,
     tagMode = 'auto',
     fallbackTag = null,
   } = req.body || {};
@@ -320,6 +330,7 @@ app.post('/api/send-bulk', async (req, res) => {
   const marks = store.getOrderMarks();
   const skipIds = new Set((store.getSkipLabelIds() || []).map(String));
   const localLabels = store.getUserLabels();
+  const chotDon = store.getChotDon();
   const delay = Math.max(0, Number(delayMs) || 0);
 
   let ok = 0;
@@ -343,6 +354,13 @@ app.post('/api/send-bulk', async (req, res) => {
     if (hit || (Array.isArray(t.skipLabels) && t.skipLabels.length)) {
       skipped++;
       write({ ...base, status: 'skipped', reason: `Mang nhãn bỏ qua: ${hit ? hit[1].name : t.skipLabels.join(', ')}` });
+      continue;
+    }
+
+    // Page da nhan "#chotdon" = chac chan da chot -> khong nhan
+    if (skipChotDon && (chotDon[t.psid] || t.chotDonAt)) {
+      skipped++;
+      write({ ...base, status: 'skipped', reason: 'Đã #chotdon — khách đã chốt đơn' });
       continue;
     }
 
