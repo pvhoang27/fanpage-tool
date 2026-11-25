@@ -330,7 +330,17 @@ app.post('/api/send-bulk', async (req, res) => {
   const marks = store.getOrderMarks();
   const skipIds = new Set((store.getSkipLabelIds() || []).map(String));
   const localLabels = store.getUserLabels();
-  const chotDon = store.getChotDon();
+  // Quet lai "#chotdon" ngay truoc khi gui: phong khi vua chot don ma danh sach tren may chua tai lai
+  let chotDon = store.getChotDon();
+  try {
+    const { pageId: pid, conversations } = await fb.fetchConversations({ maxPages: 5 });
+    chotDon = store.addChotDon(
+      conversations
+        .map((c) => fb.normalizeConversation(c, pid))
+        .map((c) => ({ psid: c.psid, at: order.findChotDon(c.messages), name: c.name, pageId: pid }))
+        .filter((c) => c.at)
+    );
+  } catch { /* loi mang thi dung ban da nho */ }
   const delay = Math.max(0, Number(delayMs) || 0);
 
   let ok = 0;
